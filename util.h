@@ -57,4 +57,5 @@ int send_pkt_INIT(int , const struct sockaddr *, socklen_t , const struct pkt_IN
 int hostname_to_ip(char * , char*);
 void printCircuitDB(struct circuit_DB*, int);
 int send_hello_all(int, const struct sockaddr *, socklen_t, struct circuit_DB*, int);
+int reply_hello(int, const struct sockaddr *, socklen_t, struct circuit_DB*, int, struct pkt_HELLO*);
 int isLittleEndean();

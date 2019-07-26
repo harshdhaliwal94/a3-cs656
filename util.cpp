@@ -101,6 +101,27 @@ int send_hello_all(int socket, const struct sockaddr * dest, socklen_t dlen, str
     return 0;
 }
 
+int reply_hello(int socket, const struct sockaddr * dest, socklen_t dlen, struct circuit_DB* ls_DB, int router_id, struct pkt_HELLO* pkt_hello){
+    unsigned int sender = (unsigned int)router_id;
+    unsigned int via = pkt_hello->link_id;
+    unsigned int reciever = pkt_hello->router_id;
+    std::cout<<"Replying to router "<<reciever<<std::endl;
+    for(int i=0;i<NBR_ROUTER;i++){
+        if(i==(int)(reciever-1)){continue;}
+        for(int j=0;j<ls_DB[i].nbr_link;j++){
+            std::cout<<"Replying to router "<<reciever<<" with lspdu of router "<<sender<<std::endl;
+            unsigned char buffer[5*32] = {0};
+            unsigned char *ptr;
+            struct pkt_LSPDU pkt_lspdu = {sender,(unsigned int)(i+1),ls_DB[i].linkcost[j].link,ls_DB[i].linkcost[j].cost,via};
+            ptr = serialize_pkt_LSPDU(buffer,(const struct pkt_LSPDU*)&pkt_lspdu);
+            if(sendto(socket, buffer, ptr - buffer, MSG_CONFIRM, dest, dlen) != ptr - buffer){
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 void printCircuitDB(struct circuit_DB* circuit, int router_id){
     printf("===================Circuit DB of router R%d===================\n",router_id);
     printf("nbr_link = %u\n",circuit->nbr_link);

@@ -14,7 +14,11 @@ int main(int argc, char** argv) {
     char buffer[MAXLINE] = {0};
     int opt =1; 
     struct sockaddr_in router_addr,nse_addr;
+    //cicuit Database:
     struct circuit_DB circuit;
+    // Link state Database
+    struct circuit_DB ls_DB[5];
+    memset(&ls_DB[0],0,5*sizeof(ls_DB[0]));
   
     // Creating socket file descriptor 
     if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) { 
@@ -70,6 +74,8 @@ int main(int argc, char** argv) {
     //Recieve circuit_DB
     n = recvfrom(sockfd, buffer, sizeof(circuit), 0, NULL, NULL);
     deserialize_circuit_DB(buffer, &circuit, sizeof(struct circuit_DB), n);
+    //Updating lsdb
+    ls_DB[router_id-1] = circuit;
     //Printing the recieved circuit_DB
     printCircuitDB(&circuit, router_id);  
     //Send Hello to neighbors
@@ -87,6 +93,21 @@ int main(int argc, char** argv) {
     		struct pkt_HELLO pkt_hello;
     		memcpy ( &pkt_hello, buffer, n );
     		std::cout<<"Recieved Hello from router "<<pkt_hello.router_id<<" via link "<<pkt_hello.link_id<<std::endl;
+    		//Send all lspdu from ls db
+    		if(reply_hello(sockfd, (const struct sockaddr *) &nse_addr,sizeof(nse_addr), (struct circuit_DB *)&ls_DB[0], router_id, (struct pkt_HELLO*)&pkt_hello)){
+    			perror("Error: Couldn't reply to neighbour with lspdu");
+    			exit(EXIT_FAILURE);
+    		}    		
+    	}
+    	else if(n == sizeof(struct pkt_LSPDU)){
+    		//extract the packet in structure
+    		struct pkt_LSPDU pkt_lspdu;
+    		memcpy ( &pkt_lspdu, buffer, n );
+    		std::cout<<"Recieved LSPDU: "<<pkt_lspdu.sender<<","<<pkt_lspdu.via<<","<<pkt_lspdu.router_id<<","<<pkt_lspdu.link_id<<","<<pkt_lspdu.cost<<std::endl;
+    		//TODO: Check if lsdb already exists i.e. unique(router_id,link_id)
+    		ls_DB[pkt_lspdu.router_id-1].nbr_link++;
+    		ls_DB[pkt_lspdu.router_id-1].linkcost[ls_DB[pkt_lspdu.router_id-1].nbr_link-1].link=pkt_lspdu.link_id;
+    		ls_DB[pkt_lspdu.router_id-1].linkcost[ls_DB[pkt_lspdu.router_id-1].nbr_link-1].cost=pkt_lspdu.cost;
     	}
     	else{
     		perror("Error: Recieved Invalid Hello packet");
@@ -94,8 +115,8 @@ int main(int argc, char** argv) {
     	}
 
     }
-
-    //Close the socket and exit SHOULD NEVER REACH HERE
+    //SHOULD NEVER REACH HERE
+    //Close the socket and exit
     close(sockfd); 
     return 0; 
 } 

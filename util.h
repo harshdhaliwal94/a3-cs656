@@ -9,6 +9,8 @@
 #include <arpa/inet.h> 
 #include <netinet/in.h> 
 #include <netdb.h>
+#include <iostream>
+#include <vector>
 
 #define MAXLINE 1024 
 #define NBR_ROUTER 5
@@ -48,8 +50,11 @@ struct circuit_DB
 unsigned char * serialize_unsigned_int(unsigned char *, int );
 unsigned char * serialize_char(unsigned char *, char );
 unsigned char * serialize_pkt_INIT(unsigned char *, const struct pkt_INIT *);
+unsigned char * serialize_pkt_HELLO(unsigned char *, const struct pkt_HELLO *);
+unsigned char * serialize_pkt_LSPDU(unsigned char *, const struct pkt_LSPDU *);
 void deserialize_circuit_DB(char *, struct circuit_DB*, int, int);
 int send_pkt_INIT(int , const struct sockaddr *, socklen_t , const struct pkt_INIT *);
 int hostname_to_ip(char * , char*);
 void printCircuitDB(struct circuit_DB*, int);
+int send_hello_all(int, const struct sockaddr *, socklen_t, struct circuit_DB*, int);
 int isLittleEndean();

@@ -1,5 +1,5 @@
 all : 
-	gcc *.c -o router
+	g++ -o router *.cpp
 
 .phony : clean
 

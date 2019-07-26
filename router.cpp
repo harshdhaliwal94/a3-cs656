@@ -13,7 +13,8 @@ int main(int argc, char** argv) {
     int sockfd; 
     char buffer[MAXLINE] = {0};
     int opt =1; 
-    struct sockaddr_in router_addr,nse_addr; 
+    struct sockaddr_in router_addr,nse_addr;
+    struct circuit_DB circuit;
   
     // Creating socket file descriptor 
     if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) { 
@@ -56,20 +57,45 @@ int main(int argc, char** argv) {
         perror("bind failed"); 
         exit(EXIT_FAILURE); 
     }
+
     //Send INIT packets to nse
     int n, len;
     struct pkt_INIT init_pkt = {(unsigned int)router_id};
-    struct circuit_DB circuit;
     memset(&circuit, 0, sizeof(struct circuit_DB));
 
     if(send_pkt_INIT(sockfd, (const struct sockaddr *) &nse_addr,sizeof(nse_addr), (const struct pkt_INIT*)&init_pkt)){
             perror("Error: failed to send INIT packet");
             exit(EXIT_FAILURE);
     }
+    //Recieve circuit_DB
     n = recvfrom(sockfd, buffer, sizeof(circuit), 0, NULL, NULL);
     deserialize_circuit_DB(buffer, &circuit, sizeof(struct circuit_DB), n);
+    //Printing the recieved circuit_DB
     printCircuitDB(&circuit, router_id);  
-  
+    //Send Hello to neighbors
+    if(send_hello_all(sockfd, (const struct sockaddr *) &nse_addr,sizeof(nse_addr), (struct circuit_DB *)&circuit, router_id)){
+            perror("Error: failed to send INIT packet");
+            exit(EXIT_FAILURE);
+    }
+    //Infinite loop
+    while(true)
+    {
+    	//recieve hello or lspdu
+    	n = recvfrom(sockfd, buffer, MAXLINE, 0, NULL, NULL);
+    	if (n == sizeof(struct pkt_HELLO))
+    	{
+    		struct pkt_HELLO pkt_hello;
+    		memcpy ( &pkt_hello, buffer, n );
+    		std::cout<<"Recieved Hello from router "<<pkt_hello.router_id<<" via link "<<pkt_hello.link_id<<std::endl;
+    	}
+    	else{
+    		perror("Error: Recieved Invalid Hello packet");
+            exit(EXIT_FAILURE);
+    	}
+
+    }
+
+    //Close the socket and exit SHOULD NEVER REACH HERE
     close(sockfd); 
     return 0; 
 } 

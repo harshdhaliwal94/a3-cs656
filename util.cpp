@@ -29,8 +29,21 @@ unsigned char * serialize_pkt_INIT(unsigned char *buffer, const struct pkt_INIT 
   buffer = serialize_unsigned_int(buffer, init_pkt->router_id);
   return buffer;
 }
+unsigned char * serialize_pkt_HELLO(unsigned char *buffer, const struct pkt_HELLO *hello_pkt){
+    buffer = serialize_unsigned_int(buffer, hello_pkt->router_id);
+    buffer = serialize_unsigned_int(buffer, hello_pkt->link_id);
+    return buffer;
+}
 
-//unsigned char * deserialize_unsigned_int(unsigned char *buffer, int *value);
+unsigned char * serialize_pkt_LSPDU(unsigned char *buffer, const struct pkt_LSPDU *lspdu_pkt){
+    buffer = serialize_unsigned_int(buffer, lspdu_pkt->sender);
+    buffer = serialize_unsigned_int(buffer, lspdu_pkt->router_id);
+    buffer = serialize_unsigned_int(buffer, lspdu_pkt->link_id);
+    buffer = serialize_unsigned_int(buffer, lspdu_pkt->cost);
+    buffer = serialize_unsigned_int(buffer, lspdu_pkt->via);
+    return buffer;
+}
+
 
 void deserialize_circuit_DB(char * buffer, struct circuit_DB* circuit, int size, int num_bytes){
 	if(num_bytes!=size){
@@ -71,6 +84,21 @@ int hostname_to_ip(char * hostname , char* ip)
         }
 
         return 1;
+}
+
+int send_hello_all(int socket, const struct sockaddr * dest, socklen_t dlen, struct circuit_DB* circuit, int router_id){
+    int i =0;
+    for(i=0;i<circuit->nbr_link;i++){
+        //create hello pdu
+        unsigned char buffer[2*32] = {0};
+        unsigned char *ptr;
+        struct pkt_HELLO hello_pkt = {(unsigned int)router_id,(unsigned int)circuit->linkcost[i].link};
+        ptr = serialize_pkt_HELLO(buffer, (const struct pkt_HELLO*)&hello_pkt);
+        if(sendto(socket, buffer, ptr - buffer, MSG_CONFIRM, dest, dlen) != ptr - buffer){
+            return 1;
+        }
+    }
+    return 0;
 }
 
 void printCircuitDB(struct circuit_DB* circuit, int router_id){

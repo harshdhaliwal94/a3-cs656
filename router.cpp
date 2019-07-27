@@ -19,6 +19,8 @@ int main(int argc, char** argv) {
     // Link state Database
     struct circuit_DB ls_DB[5];
     memset(&ls_DB[0],0,5*sizeof(ls_DB[0]));
+    //unique map of router_id,link
+    map mymap;
   
     // Creating socket file descriptor 
     if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) { 
@@ -76,6 +78,13 @@ int main(int argc, char** argv) {
     deserialize_circuit_DB(buffer, &circuit, sizeof(struct circuit_DB), n);
     //Updating lsdb
     ls_DB[router_id-1] = circuit;
+    //updating map keys:
+    for(int i=0;i<circuit.nbr_link;i++){
+    	if(!unique(router_id,circuit.linkcost[i].link,circuit.linkcost[i].cost, mymap)){
+    		perror("Error: Couldn't add router links keys to map");
+    		exit(EXIT_FAILURE);
+    	}	
+    }
     //Printing the recieved circuit_DB
     printCircuitDB(&circuit, router_id);  
     //Send Hello to neighbors
@@ -103,14 +112,29 @@ int main(int argc, char** argv) {
     		//extract the packet in structure
     		struct pkt_LSPDU pkt_lspdu;
     		memcpy ( &pkt_lspdu, buffer, n );
-    		std::cout<<"Recieved LSPDU: "<<pkt_lspdu.sender<<","<<pkt_lspdu.via<<","<<pkt_lspdu.router_id<<","<<pkt_lspdu.link_id<<","<<pkt_lspdu.cost<<std::endl;
+    		std::cout<<"Recieved LSPDU: "<<pkt_lspdu.sender<<","<<pkt_lspdu.via<<","<<pkt_lspdu.router_id<<","<<pkt_lspdu.link_id<<","<<pkt_lspdu.cost;    		
     		//TODO: Check if lsdb already exists i.e. unique(router_id,link_id)
-    		ls_DB[pkt_lspdu.router_id-1].nbr_link++;
-    		ls_DB[pkt_lspdu.router_id-1].linkcost[ls_DB[pkt_lspdu.router_id-1].nbr_link-1].link=pkt_lspdu.link_id;
-    		ls_DB[pkt_lspdu.router_id-1].linkcost[ls_DB[pkt_lspdu.router_id-1].nbr_link-1].cost=pkt_lspdu.cost;
+    		if(unique(pkt_lspdu.router_id,pkt_lspdu.link_id,pkt_lspdu.cost, mymap)){
+    			std::cout<<" unique"<<std::endl;	
+    			//call a function instead update_lsdb()
+    			ls_DB[pkt_lspdu.router_id-1].nbr_link++;
+    			if(ls_DB[pkt_lspdu.router_id-1].nbr_link>4){
+    				perror("Error: number of links exceeded 4");
+    				exit(EXIT_FAILURE);
+    			}
+    			ls_DB[pkt_lspdu.router_id-1].linkcost[ls_DB[pkt_lspdu.router_id-1].nbr_link-1].link=pkt_lspdu.link_id;
+    			ls_DB[pkt_lspdu.router_id-1].linkcost[ls_DB[pkt_lspdu.router_id-1].nbr_link-1].cost=pkt_lspdu.cost;
+    			//Broadcast this lspdu to other neighbours;
+    			if(broadcast_lspdu(sockfd, (const struct sockaddr *) &nse_addr,sizeof(nse_addr),(struct pkt_LSPDU*)&pkt_lspdu,(struct circuit_DB*)&circuit, router_id)){
+    				perror("Error: Couldn't broadcast lspdu to neighbours");
+    				exit(EXIT_FAILURE);
+    			}
+    			//printLSDB((struct circuit_DB *)&ls_DB[0], router_id);
+    		}
+    		std::cout<<std::endl;
     	}
     	else{
-    		perror("Error: Recieved Invalid Hello packet");
+    		perror("Error: Recieved Invalid packet");
             exit(EXIT_FAILURE);
     	}
 

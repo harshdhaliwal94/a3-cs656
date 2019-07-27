@@ -122,15 +122,51 @@ int reply_hello(int socket, const struct sockaddr * dest, socklen_t dlen, struct
     return 0;
 }
 
+bool unique(unsigned int router_id, unsigned int link_id, unsigned int cost, map &mymap){
+    std::pair<map::iterator,bool> ret;
+    ret = mymap.insert ( std::pair<pair,int>(std::make_pair(router_id,link_id),cost) );
+    if (ret.second==false) {
+        //std::cout << "element 'z' already existed";
+        //std::cout << " with a value of " << ret.first->second << '\n';
+        return false;
+    }
+
+    return true;
+}
+
+int broadcast_lspdu(int socket, const struct sockaddr *dest, socklen_t dlen, struct pkt_LSPDU* pkt_lspdu_orig, struct circuit_DB* circuit, int router_id){
+    for(int i=0;i<circuit->nbr_link;i++){        
+        if(pkt_lspdu_orig->via==(unsigned int)(circuit->linkcost[i].link)){continue;}
+        std::cout<<"Broadcasting "<<pkt_lspdu_orig->router_id<<","<<pkt_lspdu_orig->link_id<<" to "<< (circuit->linkcost[i]).link<<std::endl;
+        unsigned char buffer[5*32] = {0};
+        unsigned char *ptr;
+        struct pkt_LSPDU pkt_lspdu = {(unsigned int)router_id,pkt_lspdu_orig->router_id,pkt_lspdu_orig->link_id,pkt_lspdu_orig->cost,(unsigned int)((circuit->linkcost[i]).link)};
+        ptr = serialize_pkt_LSPDU(buffer, (const struct pkt_LSPDU*)&pkt_lspdu);
+        if(sendto(socket, buffer, ptr - buffer, MSG_CONFIRM, dest, dlen) != ptr - buffer){
+            return 1;
+        }
+    }
+    return 0;
+}
+
 void printCircuitDB(struct circuit_DB* circuit, int router_id){
     printf("===================Circuit DB of router R%d===================\n",router_id);
     printf("nbr_link = %u\n",circuit->nbr_link);
-    printf("link = %u linkcost = %u\n",circuit->linkcost[0].link,circuit->linkcost[0].cost);
-    printf("link = %u linkcost = %u\n",circuit->linkcost[1].link,circuit->linkcost[1].cost);
-    printf("link = %u linkcost = %u\n",circuit->linkcost[2].link,circuit->linkcost[2].cost);
-    printf("link = %u linkcost = %u\n",circuit->linkcost[3].link,circuit->linkcost[3].cost);
-    printf("link = %u linkcost = %u\n",circuit->linkcost[4].link,circuit->linkcost[4].cost);
+    for(int i=0;i<circuit->nbr_link;i++){
+        printf("link = %u linkcost = %u\n",circuit->linkcost[i].link,circuit->linkcost[i].cost);    
+    }
+    //printf("link = %u linkcost = %u\n",circuit->linkcost[0].link,circuit->linkcost[0].cost);
+    //printf("link = %u linkcost = %u\n",circuit->linkcost[1].link,circuit->linkcost[1].cost);
+    //printf("link = %u linkcost = %u\n",circuit->linkcost[2].link,circuit->linkcost[2].cost);
+    //printf("link = %u linkcost = %u\n",circuit->linkcost[3].link,circuit->linkcost[3].cost);
+    //printf("link = %u linkcost = %u\n",circuit->linkcost[4].link,circuit->linkcost[4].cost);
     printf("===============================================================\n"); 
+}
+
+void printLSDB(struct circuit_DB * lsdb, int router_id){
+    for(int i=0;i<NBR_ROUTER;i++){
+        printCircuitDB(&lsdb[i],i+1);
+    }
 }
 
 int isLittleEndean()  

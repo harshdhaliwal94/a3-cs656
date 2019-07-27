@@ -11,9 +11,14 @@
 #include <netdb.h>
 #include <iostream>
 #include <vector>
+#include <map>
+//#include <utililty>
 
 #define MAXLINE 1024 
 #define NBR_ROUTER 5
+
+typedef std::pair<unsigned int,unsigned int> pair;
+typedef std::map<pair,unsigned int> map;
 
 struct pkt_HELLO
 {
@@ -56,6 +61,9 @@ void deserialize_circuit_DB(char *, struct circuit_DB*, int, int);
 int send_pkt_INIT(int , const struct sockaddr *, socklen_t , const struct pkt_INIT *);
 int hostname_to_ip(char * , char*);
 void printCircuitDB(struct circuit_DB*, int);
+void printLSDB(struct circuit_DB *, int);
 int send_hello_all(int, const struct sockaddr *, socklen_t, struct circuit_DB*, int);
 int reply_hello(int, const struct sockaddr *, socklen_t, struct circuit_DB*, int, struct pkt_HELLO*);
+int broadcast_lspdu(int, const struct sockaddr *,socklen_t, struct pkt_LSPDU*,struct circuit_DB*, int);
+bool unique(unsigned int, unsigned int, unsigned int, map &);
 int isLittleEndean();

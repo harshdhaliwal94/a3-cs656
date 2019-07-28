@@ -54,6 +54,16 @@ struct circuit_DB
         struct link_cost linkcost[NBR_ROUTER]; /* we assume that at most NBR_ROUTER links are attached to each router */
 };
 
+struct route_entry{
+        unsigned int distance;
+        unsigned int hop_router;
+    };
+
+struct RIB{
+        bool update;
+        struct route_entry route[5];
+};
+
 unsigned char * serialize_unsigned_int(unsigned char *, int );
 unsigned char * serialize_char(unsigned char *, char );
 unsigned char * serialize_pkt_INIT(unsigned char *, const struct pkt_INIT *);
@@ -70,5 +80,5 @@ int broadcast_lspdu(int, const struct sockaddr *,socklen_t, struct pkt_LSPDU*,st
 bool unique(unsigned int, unsigned int, unsigned int, map &, link_map &, pair adj_matrix[][5]);
 int update_lsdb(struct circuit_DB *, struct pkt_LSPDU*);
 void update_adj_matrix(pair, pair, pair adj_matrix[][5]);
-void spf(pair adj_matrix[][5], int, std::map<unsigned int, unsigned int> &);
+void spf(pair adj_matrix[][5], int, struct RIB *);
 int isLittleEndean();

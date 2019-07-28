@@ -19,6 +19,9 @@ int main(int argc, char** argv) {
     // Link state Database
     struct circuit_DB ls_DB[5];
     memset(&ls_DB[0],0,5*sizeof(ls_DB[0]));
+    //RIB
+    struct RIB route_info;
+    memset(&route_info,0,sizeof(route_info));
     //unique map of router_id,link
     map mymap;
     link_map link2router;
@@ -97,7 +100,7 @@ int main(int argc, char** argv) {
     	}	
     }
     //Printing the recieved circuit_DB
-    std::cout<<"Circuit DB recieved"<<std::endl;
+    //std::cout<<"Circuit DB recieved"<<std::endl;
     printCircuitDB(&circuit, router_id);  
     //Send Hello to neighbors
     if(send_hello_all(sockfd, (const struct sockaddr *) &nse_addr,sizeof(nse_addr), (struct circuit_DB *)&circuit, router_id)){
@@ -113,11 +116,13 @@ int main(int argc, char** argv) {
     	{
     		struct pkt_HELLO pkt_hello;
     		memcpy ( &pkt_hello, buffer, n );
-    		std::cout<<"Recieved Hello from router "<<pkt_hello.router_id<<" via link "<<pkt_hello.link_id<<std::endl;
+    		//std::cout<<"Recieved Hello from router "<<pkt_hello.router_id<<" via link "<<pkt_hello.link_id<<std::endl;
+    		
     		//add hello router to map:
     		std::pair<std::map<unsigned int,unsigned int>::iterator,bool> ret;
     		ret = hello_map.insert ( std::pair<unsigned int,unsigned int>(pkt_hello.link_id,pkt_hello.router_id) );
     		if(ret.second==false){perror("Error: hello map error"); exit(EXIT_FAILURE);}
+    		
     		//Send all lspdu from ls db
     		if(reply_hello(sockfd, (const struct sockaddr *) &nse_addr,sizeof(nse_addr), (struct circuit_DB *)&ls_DB[0], router_id, (struct pkt_HELLO*)&pkt_hello)){
     			perror("Error: Couldn't reply to neighbour with lspdu");
@@ -128,9 +133,7 @@ int main(int argc, char** argv) {
     		//extract the packet in structure
     		struct pkt_LSPDU pkt_lspdu;
     		memcpy ( &pkt_lspdu, buffer, n );
-    		//std::cout<<"Recieved LSPDU: "<<pkt_lspdu.sender<<","<<pkt_lspdu.via<<","<<pkt_lspdu.router_id<<","<<pkt_lspdu.link_id<<","<<pkt_lspdu.cost;    		
-    		if(unique(pkt_lspdu.router_id,pkt_lspdu.link_id,pkt_lspdu.cost, mymap, link2router,adj_matrix)){
-    			//std::cout<<" unique"<<std::endl;	
+    		if(unique(pkt_lspdu.router_id,pkt_lspdu.link_id,pkt_lspdu.cost, mymap, link2router,adj_matrix)){	
     			//call update toplology method
     			if(update_lsdb((struct circuit_DB *)&ls_DB[0], (struct pkt_LSPDU*)&pkt_lspdu)) {
     				perror("Error: update toplogy error");
@@ -143,21 +146,9 @@ int main(int argc, char** argv) {
     				exit(EXIT_FAILURE);
     			}
     			std::cout<<"LSDB updated"<<std::endl;
-    			//printLSDB((struct circuit_DB *)&ls_DB[0], router_id);
-    			
-    			//std::cout << "link_map contains:\n";
-    			//link_map::iterator it;
-  				//for (it=link2router.begin(); it!=link2router.end(); ++it)
-  				//{
-    			//	std::cout << it->first.first <<","<<it->first.second<<" => ";
-    			//	for (link_set::iterator i = (it->second).begin(); i != (it->second).end(); ++i)
-    			//		std::cout << *i << ' ';
-    			//	std::cout<<std::endl;
-  				//}
     			//recalculate shortest paths and update next hop database RIB
-    			spf(adj_matrix, router_id, hello_map);
+    			spf(adj_matrix, router_id, &route_info);
     		}
-    		//std::cout<<std::endl;
     	}
     	else{
     		perror("Error: Recieved Invalid packet");

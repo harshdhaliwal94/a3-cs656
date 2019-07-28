@@ -181,17 +181,25 @@ void update_adj_matrix(pair router, pair link, pair adj_matrix[][5]){
     adj_matrix[router.second-1][router.first-1] = link;
 }
 
-void spf(pair adj_matrix[][5], int router_id, std::map<unsigned int,unsigned int> &hello_map){
+void spf(pair adj_matrix[][5], int router_id, struct RIB * route_info){
     //initialization
     struct node{
         unsigned int distance;
         unsigned int hop_link;
+        unsigned int hop_router;
         unsigned int done;
     };
     struct node all_node[5];
     for(int i=0;i<5;i++){
+        //std::cout<<"initialization loop"<<std::endl;
         all_node[i].distance = adj_matrix[router_id-1][i].second;
         all_node[i].hop_link = adj_matrix[router_id-1][i].first;
+        if(all_node[i].distance!=UINT_MAX)
+        {
+            all_node[i].hop_router = i+1;
+        }
+        else
+            all_node[i].hop_router = 0;
         all_node[i].done = 0;
     }
     int done=0;
@@ -200,9 +208,11 @@ void spf(pair adj_matrix[][5], int router_id, std::map<unsigned int,unsigned int
     done++;
 
     while(done!=5){
+        //std::cout<<"dijkstra loop: "<<done<<std::endl;
         //find router not done yet with minimum distance
         int next_router = -1;
         for(int i=0;i<5;i++){
+            //std::cout<<"for loop 1: "<<i<<std::endl;
             if(all_node[i].done){continue;}
             if(next_router==-1)
                 next_router = i+1;
@@ -213,6 +223,7 @@ void spf(pair adj_matrix[][5], int router_id, std::map<unsigned int,unsigned int
         }
         all_node[next_router-1].done = 1;
         done++;
+        //std::cout<<"dijkstra loop done update: "<<done<<std::endl;
         //update distance and hop of all neighbors of next_router:
         for(int i=0;i<5;i++){
             if(all_node[i].done){continue;}
@@ -220,20 +231,44 @@ void spf(pair adj_matrix[][5], int router_id, std::map<unsigned int,unsigned int
             {
                 all_node[i].distance = all_node[next_router-1].distance + adj_matrix[next_router-1][i].second;
                 all_node[i].hop_link = all_node[next_router-1].hop_link;
+                all_node[i].hop_router = all_node[next_router-1].hop_router;
             }
+            
         }
+    }
+    //Updated?
+    for(int i=0;i<5;i++){
+        if(route_info->update)
+            {
+                route_info->route[i].distance = all_node[i].distance;
+                route_info->route[i].hop_router = all_node[i].hop_router;   
+            }
+        else if(route_info->route[i].distance!=all_node[i].distance||route_info->route[i].hop_router!=all_node[i].hop_router)
+            {
+                route_info->route[i].distance = all_node[i].distance;
+                route_info->route[i].hop_router = all_node[i].hop_router;
+                route_info->update = 1;
+                
+            } 
     }
 
     //print RIB
-    std::cout<<"===========RIB============"<<std::endl;
-    for(int i=0;i<5;i++){
-        if(hello_map.find(all_node[i].hop_link)!=hello_map.end())
-            std::cout<<"R"<<router_id<<" -> "<<"R"<<i+1<<" -> "<<"R"<<hello_map.find(all_node[i].hop_link)->second<<","<<all_node[i].distance<<std::endl;
-        else if(i+1==router_id)
-            std::cout<<"R"<<router_id<<" -> "<<"R"<<i+1<<" -> Local,0"<<std::endl;
-        else
-            std::cout<<"R"<<router_id<<" -> "<<"R"<<i+1<<" -> INF,INF"<<std::endl;
+    if(route_info->update)
+    {
+        std::cout<<"===========RIB============"<<std::endl;
+        for(int i=0;i<5;i++){
+            //if(hello_map.find(all_node[i].hop_link)!=hello_map.end())
+            //    std::cout<<"R"<<router_id<<" -> "<<"R"<<i+1<<" -> "<<"R"<<hello_map.find(all_node[i].hop_link)->second<<","<<all_node[i].distance<<std::endl;
+            if(i+1==router_id)
+                std::cout<<"R"<<router_id<<" -> "<<"R"<<i+1<<" -> Local,0"<<std::endl;
+            else if(all_node[i].hop_router!=0)
+                std::cout<<"R"<<router_id<<" -> "<<"R"<<i+1<<" -> "<<"R"<<route_info->route[i].hop_router<<","<<route_info->route[i].distance<<std::endl;
+            else
+                std::cout<<"R"<<router_id<<" -> "<<"R"<<i+1<<" -> INF,INF"<<std::endl;
+        }
+        route_info->update = 0;
     }
+    
 }
 
 void printCircuitDB(struct circuit_DB* circuit, int router_id){

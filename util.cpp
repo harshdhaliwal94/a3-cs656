@@ -53,11 +53,12 @@ void deserialize_circuit_DB(char * buffer, struct circuit_DB* circuit, int size,
     memcpy ( circuit, buffer, num_bytes );
 }
 
-int send_pkt_INIT(int socket, const struct sockaddr *dest, socklen_t dlen, const struct pkt_INIT *init_pkt)
+int send_pkt_INIT(int socket, const struct sockaddr *dest, socklen_t dlen, const struct pkt_INIT *init_pkt, FILE* logfd)
 {
   unsigned char buffer[32] = {0}; 
   unsigned char *ptr;
   ptr = serialize_pkt_INIT(buffer, init_pkt);
+  fprintf(logfd, "R%u sends an INIT: router_id %u\n", init_pkt->router_id, init_pkt->router_id);
   return sendto(socket, buffer, ptr - buffer, MSG_CONFIRM, dest, dlen) != ptr - buffer;
 }
 
@@ -86,7 +87,7 @@ int hostname_to_ip(char * hostname , char* ip)
         return 1;
 }
 
-int send_hello_all(int socket, const struct sockaddr * dest, socklen_t dlen, struct circuit_DB* circuit, int router_id){
+int send_hello_all(int socket, const struct sockaddr * dest, socklen_t dlen, struct circuit_DB* circuit, int router_id,FILE* logfd){
     int i =0;
     for(i=0;i<circuit->nbr_link;i++){
         //create hello pdu
@@ -94,6 +95,7 @@ int send_hello_all(int socket, const struct sockaddr * dest, socklen_t dlen, str
         unsigned char *ptr;
         struct pkt_HELLO hello_pkt = {(unsigned int)router_id,(unsigned int)circuit->linkcost[i].link};
         ptr = serialize_pkt_HELLO(buffer, (const struct pkt_HELLO*)&hello_pkt);
+        fprintf(logfd, "R%d sends a HELLO: router_id %u link_id %u\n",router_id,hello_pkt.router_id,hello_pkt.link_id);
         if(sendto(socket, buffer, ptr - buffer, MSG_CONFIRM, dest, dlen) != ptr - buffer){
             return 1;
         }
@@ -101,19 +103,18 @@ int send_hello_all(int socket, const struct sockaddr * dest, socklen_t dlen, str
     return 0;
 }
 
-int reply_hello(int socket, const struct sockaddr * dest, socklen_t dlen, struct circuit_DB* ls_DB, int router_id, struct pkt_HELLO* pkt_hello){
+int reply_hello(int socket, const struct sockaddr * dest, socklen_t dlen, struct circuit_DB* ls_DB, int router_id, struct pkt_HELLO* pkt_hello,FILE* logfd){
     unsigned int sender = (unsigned int)router_id;
     unsigned int via = pkt_hello->link_id;
     unsigned int reciever = pkt_hello->router_id;
-    std::cout<<"Replying to router "<<reciever<<std::endl;
     for(int i=0;i<NBR_ROUTER;i++){
         if(i==(int)(reciever-1)){continue;}
         for(int j=0;j<ls_DB[i].nbr_link;j++){
-            std::cout<<"Replying to router "<<reciever<<" with lspdu of router "<<sender<<std::endl;
             unsigned char buffer[5*32] = {0};
             unsigned char *ptr;
             struct pkt_LSPDU pkt_lspdu = {sender,(unsigned int)(i+1),ls_DB[i].linkcost[j].link,ls_DB[i].linkcost[j].cost,via};
             ptr = serialize_pkt_LSPDU(buffer,(const struct pkt_LSPDU*)&pkt_lspdu);
+            fprintf(logfd, "R%d sends an LSPDU: sender %u router_id %u link_id %u cost %u via %u\n",router_id, sender,pkt_lspdu.router_id, pkt_lspdu.link_id,pkt_lspdu.cost,pkt_lspdu.via);
             if(sendto(socket, buffer, ptr - buffer, MSG_CONFIRM, dest, dlen) != ptr - buffer){
                 return 1;
             }
@@ -147,14 +148,15 @@ bool unique(unsigned int router_id, unsigned int link_id, unsigned int cost, map
     return true;
 }
 
-int broadcast_lspdu(int socket, const struct sockaddr *dest, socklen_t dlen, struct pkt_LSPDU* pkt_lspdu_orig, struct circuit_DB* circuit, int router_id, std::map<unsigned int, unsigned int>&hello_map){
+int broadcast_lspdu(int socket, const struct sockaddr *dest, socklen_t dlen, struct pkt_LSPDU* pkt_lspdu_orig, struct circuit_DB* circuit, int router_id, std::map<unsigned int, unsigned int>&hello_map,FILE* logfd){
     for(int i=0;i<circuit->nbr_link;i++){        
         if(pkt_lspdu_orig->via==(unsigned int)(circuit->linkcost[i].link)){continue;}
         if(hello_map.find(pkt_lspdu_orig->via)==hello_map.end()){continue;}
-        std::cout<<"Broadcasting "<<pkt_lspdu_orig->router_id<<","<<pkt_lspdu_orig->link_id<<" to "<< (circuit->linkcost[i]).link<<std::endl;
+        //std::cout<<"Broadcasting "<<pkt_lspdu_orig->router_id<<","<<pkt_lspdu_orig->link_id<<" to "<< (circuit->linkcost[i]).link<<std::endl;
         unsigned char buffer[5*32] = {0};
         unsigned char *ptr;
         struct pkt_LSPDU pkt_lspdu = {(unsigned int)router_id,pkt_lspdu_orig->router_id,pkt_lspdu_orig->link_id,pkt_lspdu_orig->cost,(unsigned int)((circuit->linkcost[i]).link)};
+        fprintf(logfd, "R%d sends an LSPDU: sender %d router_id %u link_id %u cost %u via %u\n",router_id,pkt_lspdu.sender,pkt_lspdu.router_id, pkt_lspdu.link_id,pkt_lspdu.cost,pkt_lspdu.via);
         ptr = serialize_pkt_LSPDU(buffer, (const struct pkt_LSPDU*)&pkt_lspdu);
         if(sendto(socket, buffer, ptr - buffer, MSG_CONFIRM, dest, dlen) != ptr - buffer){
             return 1;
@@ -162,7 +164,7 @@ int broadcast_lspdu(int socket, const struct sockaddr *dest, socklen_t dlen, str
     }
     return 0;
 }
-int update_lsdb(struct circuit_DB *ls_DB, struct pkt_LSPDU* pkt_lspdu){
+int update_lsdb(struct circuit_DB *ls_DB, struct pkt_LSPDU* pkt_lspdu,FILE* logfd){
     unsigned int router_id = pkt_lspdu->router_id;
     unsigned int nbr_link = ls_DB[router_id-1].nbr_link;
     nbr_link++;
@@ -181,7 +183,7 @@ void update_adj_matrix(pair router, pair link, pair adj_matrix[][5]){
     adj_matrix[router.second-1][router.first-1] = link;
 }
 
-void spf(pair adj_matrix[][5], int router_id, struct RIB * route_info){
+void spf(pair adj_matrix[][5], int router_id, struct RIB * route_info, FILE* logfd){
     //initialization
     struct node{
         unsigned int distance;
@@ -253,36 +255,43 @@ void spf(pair adj_matrix[][5], int router_id, struct RIB * route_info){
     }
 
     //print RIB
-    if(route_info->update)
+    //if(route_info->update)
+    if(true)
     {
-        std::cout<<"===========RIB============"<<std::endl;
+        //std::cout<<"===========RIB============"<<std::endl;
+        fprintf(logfd, "#RIB\n");
         for(int i=0;i<5;i++){
             //if(hello_map.find(all_node[i].hop_link)!=hello_map.end())
             //    std::cout<<"R"<<router_id<<" -> "<<"R"<<i+1<<" -> "<<"R"<<hello_map.find(all_node[i].hop_link)->second<<","<<all_node[i].distance<<std::endl;
             if(i+1==router_id)
-                std::cout<<"R"<<router_id<<" -> "<<"R"<<i+1<<" -> Local,0"<<std::endl;
+                fprintf(logfd, "R%d -> R%d -> Local, 0\n",router_id,i+1);
+                //std::cout<<"R"<<router_id<<" -> "<<"R"<<i+1<<" -> Local,0"<<std::endl;
             else if(all_node[i].hop_router!=0)
-                std::cout<<"R"<<router_id<<" -> "<<"R"<<i+1<<" -> "<<"R"<<route_info->route[i].hop_router<<","<<route_info->route[i].distance<<std::endl;
+                fprintf(logfd, "R%d -> R%d -> R%u, %u\n",router_id,i+1,route_info->route[i].hop_router,route_info->route[i].distance);
+                //std::cout<<"R"<<router_id<<" -> "<<"R"<<i+1<<" -> "<<"R"<<route_info->route[i].hop_router<<","<<route_info->route[i].distance<<std::endl;
             else
-                std::cout<<"R"<<router_id<<" -> "<<"R"<<i+1<<" -> INF,INF"<<std::endl;
+                fprintf(logfd, "R%d -> R%d -> INF, INF\n",router_id,i+1);
+                //std::cout<<"R"<<router_id<<" -> "<<"R"<<i+1<<" -> INF,INF"<<std::endl;
         }
         route_info->update = 0;
     }
     
 }
 
-void printCircuitDB(struct circuit_DB* circuit, int router_id){
-    printf("===================Circuit DB of router R%d===================\n",router_id);
-    printf("nbr_link = %u\n",circuit->nbr_link);
+void printCircuitDB(struct circuit_DB* circuit, int router_id,FILE* logfd){
+    fprintf(logfd, "R%d receives a CIRCUIT_DB:\nnbr_link %u\n", router_id, circuit->nbr_link);
     for(int i=0;i<circuit->nbr_link;i++){
-        printf("link = %u linkcost = %u\n",circuit->linkcost[i].link,circuit->linkcost[i].cost);    
+        fprintf(logfd, "link_id %u cost %u\n",circuit->linkcost[i].link,circuit->linkcost[i].cost);    
     }
-    printf("===============================================================\n"); 
 }
 
-void printLSDB(struct circuit_DB * lsdb, int router_id){
+void printLSDB(struct circuit_DB * lsdb, int router_id,FILE* logfd){
+    fprintf(logfd, "# Topology database\n");
     for(int i=0;i<NBR_ROUTER;i++){
-        printCircuitDB(&lsdb[i],i+1);
+        fprintf(logfd,"R%d -> R%d nbr_link %u\n",router_id, i+1, lsdb[i].nbr_link);
+        for(int j=0;j<lsdb[i].nbr_link;j++){
+            fprintf(logfd, "R%d -> R%d link %u cost %u\n",router_id,i+1,lsdb[i].linkcost[j].link,lsdb[i].linkcost[j].cost);    
+        }
     }
 }
 

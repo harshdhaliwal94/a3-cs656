@@ -12,13 +12,15 @@
 #include <iostream>
 #include <vector>
 #include <map>
-//#include <utililty>
+#include <climits>
 
 #define MAXLINE 1024 
 #define NBR_ROUTER 5
 
 typedef std::pair<unsigned int,unsigned int> pair;
 typedef std::map<pair,unsigned int> map;
+typedef std::map<pair,std::vector<unsigned int> > link_map;
+typedef std::vector<unsigned int> link_set;
 
 struct pkt_HELLO
 {
@@ -64,6 +66,9 @@ void printCircuitDB(struct circuit_DB*, int);
 void printLSDB(struct circuit_DB *, int);
 int send_hello_all(int, const struct sockaddr *, socklen_t, struct circuit_DB*, int);
 int reply_hello(int, const struct sockaddr *, socklen_t, struct circuit_DB*, int, struct pkt_HELLO*);
-int broadcast_lspdu(int, const struct sockaddr *,socklen_t, struct pkt_LSPDU*,struct circuit_DB*, int);
-bool unique(unsigned int, unsigned int, unsigned int, map &);
+int broadcast_lspdu(int, const struct sockaddr *,socklen_t, struct pkt_LSPDU*,struct circuit_DB*, int, std::map<unsigned int, unsigned int> &);
+bool unique(unsigned int, unsigned int, unsigned int, map &, link_map &, pair adj_matrix[][5]);
+int update_lsdb(struct circuit_DB *, struct pkt_LSPDU*);
+void update_adj_matrix(pair, pair, pair adj_matrix[][5]);
+void spf(pair adj_matrix[][5], int, std::map<unsigned int, unsigned int> &);
 int isLittleEndean();

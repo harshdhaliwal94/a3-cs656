@@ -279,16 +279,19 @@ void spf(pair adj_matrix[][5], int router_id, struct RIB * route_info, FILE* log
 }
 
 void printCircuitDB(struct circuit_DB* circuit, int router_id,FILE* logfd){
-    fprintf(logfd, "R%d receives a CIRCUIT_DB:\nnbr_link %u\n", router_id, circuit->nbr_link);
+    fprintf(logfd, "R%d receives a CIRCUIT_DB\n", router_id);
+    fprintf(logfd, "# Topology database\n");
+    fprintf(logfd, "R%d -> R%d -> nbr_link %u\n",router_id , router_id, circuit->nbr_link);
     for(int i=0;i<circuit->nbr_link;i++){
-        fprintf(logfd, "link_id %u cost %u\n",circuit->linkcost[i].link,circuit->linkcost[i].cost);    
+        fprintf(logfd, "R%d -> R%d -> link %u cost %u\n",router_id, router_id, circuit->linkcost[i].link,circuit->linkcost[i].cost);    
     }
 }
 
 void printLSDB(struct circuit_DB * lsdb, int router_id,FILE* logfd){
     fprintf(logfd, "# Topology database\n");
     for(int i=0;i<NBR_ROUTER;i++){
-        fprintf(logfd,"R%d -> R%d nbr_link %u\n",router_id, i+1, lsdb[i].nbr_link);
+        if(lsdb[i].nbr_link>0)
+            fprintf(logfd,"R%d -> R%d nbr_link %u\n",router_id, i+1, lsdb[i].nbr_link);
         for(int j=0;j<lsdb[i].nbr_link;j++){
             fprintf(logfd, "R%d -> R%d link %u cost %u\n",router_id,i+1,lsdb[i].linkcost[j].link,lsdb[i].linkcost[j].cost);    
         }
